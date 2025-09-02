@@ -190,7 +190,8 @@
     <div id="startOverlay" class="overlay">
         <div class="menu">
             <h1>Corona Strike</h1>
-            <p>Evita los virus que caen. Usa las flechas o toca los botones. Sobrevive el mayor tiempo posible y gana monedas.</p>
+            <p>Evita las vacunas que caen. Usa las flechas o toca los botones. Los virus no existen eliminalos como la mentira que son 
+                y gana monedas.</p>
             <div>
                 <button id="startBtn" class="btn">Comenzar</button>
                 <button id="howBtn" class="small">Cómo jugar</button>
@@ -829,19 +830,14 @@
     // keyboard shortcuts
     addEventListener('keydown', e=>{ if(e.key==='p' || e.key==='P') togglePause(); if(e.key==='m' || e.key==='M') setMute(!isMuted); });
 
-    // allow clicking canvas to resume audio context on some browsers
+    // allow clicking canvas/tap mobile to disparar (solo shoot, no mover)
     canvas.addEventListener('pointerdown', (e)=>{
-        if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        if(e.pointerType === 'mouse'){
-            if(running && player.alive) shoot();
-        } else {
-            // touch/pen: start movement instead of instant shooting
-            onScreenPointerDown(e);
-        }
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    if(e.target.closest && e.target.closest('#touchButtons')) return;
+    e.preventDefault();
+    if(running && player.alive) shoot();
     }, {passive:false});
-    canvas.addEventListener('pointermove', (e)=>{ onScreenPointerMove(e); }, {passive:true});
-    canvas.addEventListener('pointerup', (e)=>{ onScreenPointerUp(e); }, {passive:true});
-    canvas.addEventListener('pointercancel', (e)=>{ onScreenPointerUp(e); }, {passive:true});
+    // Eliminamos movimiento por tap
 
     // Prevent long-press context menus on mobile
     window.addEventListener('contextmenu', (e)=>{ if(IS_MOBILE) e.preventDefault(); });
