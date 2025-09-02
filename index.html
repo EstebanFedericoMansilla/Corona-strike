@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corona Strike — Juego</title>
+    <style>
+        :root{
+            --ui:#e9f5ff;
+            --accent:#ff4d4d;
+            --bg1:#071026;
+            --bg2:#00121a;
+        }
+        html,body{height:100%;margin:0;font-family:Inter, Arial, sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+        #container{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+        canvas{display:block;background:transparent;width:100%;height:100%;}
+        #ui{
+            position:fixed;left:18px;top:18px;color:var(--ui);z-index:20;text-shadow:0 2px 8px rgba(0,0,0,0.7)
+        }
+        #ui .score{font-size:20px;margin-bottom:6px}
+        #ui .high{font-size:12px;opacity:0.8}
+        #cityInfo{
+            position:fixed;right:18px;top:120px;color:var(--ui);z-index:20;text-shadow:0 2px 8px rgba(0,0,0,0.7);
+            background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:8px;backdrop-filter:blur(4px);
+            font-size:14px;text-align:right;
+        }
+        #cityInfo .city{font-weight:600;margin-bottom:2px}
+        #cityInfo .progress{font-size:11px;opacity:0.8}
+        .overlay{
+            position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30;pointer-events:auto
+        }
+        .menu{background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);padding:28px;border-radius:12px;color:var(--ui);text-align:center;max-width:520px}
+        .menu h1{margin:0 0 8px;font-size:34px;letter-spacing:1px}
+        .menu p{margin:6px 0 18px;opacity:0.9}
+        .btn{display:inline-block;background:var(--accent);color:white;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;cursor:pointer}
+        .small{background:rgba(255,255,255,0.06);padding:8px;border-radius:8px;margin-left:8px}
+        #touchButtons{position:fixed;left:12px;bottom:18px;z-index:25;display:flex;gap:8px}
+        .touch{width:80px;height:60px;background:rgba(255,255,255,0.06);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ui);font-weight:700}
+        .credit{position:fixed;right:18px;bottom:10px;color:rgba(255,255,255,0.6);font-size:12px}
+        /* small devices */
+        @media (max-width:600px){.menu{margin:18px;width:92%}.btn{padding:12px 20px}}
+        /* animated politician message */
+        #politicoMsg{position:fixed;left:50%;top:18px;transform:translateX(-50%) translateY(-16px);opacity:0;pointer-events:none;z-index:40;display:block}
+        #politicoMsg .card{display:flex;gap:12px;align-items:center;background:rgba(0,0,0,0.7);color:#fff;padding:12px 16px;border-radius:12px;max-width:min(680px,88vw);box-shadow:0 10px 26px rgba(0,0,0,0.5);backdrop-filter:blur(6px)}
+        #politicoMsg .avatar{width:56px;height:56px;flex:0 0 56px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,0.08);display:grid;place-items:center;animation:bob 2.6s ease-in-out infinite}
+        #politicoMsg .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+        #politicoMsg .bubble{font-size:15px;line-height:1.35}
+        #politicoMsg.show{opacity:1;transform:translateX(-50%) translateY(0);transition:opacity .35s ease, transform .35s ease}
+        @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="container">
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    </div>
+
+    <div id="ui">
+        <div class="score">Puntuación: <span id="score">0</span></div>
+        <div class="high">Mejor: <span id="high">0</span></div>
+    </div>
+
+    <div id="cityInfo">
+        <div class="city">Madrid</div>
+        <div class="progress">Batalla en progreso...</div>
+    </div>
+
+    <div style="position:fixed;right:18px;top:18px;z-index:22;display:flex;gap:8px;align-items:center">
+        <button id="pauseBtn" class="small" title="Pausa (P)">Pausa</button>
+        <button id="stopBtn" class="small" title="Detener">Detener</button>
+        <button id="muteBtn" class="small" title="Silenciar (M)">🔈</button>
+    </div>
+
+    <div id="startOverlay" class="overlay">
+        <div class="menu">
+            <h1>Corona Strike</h1>
+            <p>Evita los virus que caen. Usa las flechas o toca los botones. Sobrevive el mayor tiempo posible y gana monedas.</p>
+            <div>
+                <button id="startBtn" class="btn">Comenzar</button>
+                <button id="howBtn" class="small">Cómo jugar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay" style="display:none;pointer-events:auto">
+        <div class="menu" id="gameOverMenu">
+            <h1 id="goTitle">Game Over</h1>
+            <p id="goMsg">Terminaste. Puntuación: <strong id="finalScore">0</strong></p>
+            <div>
+                <button id="retryBtn" class="btn">Reintentar</button>
+                <button id="shareBtn" class="small">Guardar/Compartir</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pauseOverlay" class="overlay" style="display:none;pointer-events:auto">
+        <div class="menu">
+            <h1>Pausa</h1>
+            <p>Juego en pausa. Presiona <strong>P</strong> o el botón para continuar.</p>
+            <div>
+                <button id="resumeBtn" class="btn">Continuar</button>
+                <button id="stopFromPause" class="small">Detener</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="touchButtons">
+        <div id="leftTouch" class="touch">◀</div>
+        <div id="rightTouch" class="touch">▶</div>
+    </div>
+
+    <div class="credit">Hecho con ❤️ | Música: Hidden Agenda por Kevin MacLeod (incompetech.com) Licensed under Creative Commons: By Attribution 4.0 License</div>
+
+    <div id="politicoMsg">
+        <div class="card">
+            <div class="avatar" aria-hidden="true">
+                <img src="politician.png" alt="Político" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block'">
+                <!-- Fallback SVG avatar -->
+                <svg viewBox="0 0 64 64" width="42" height="42" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:none">
+                    <circle cx="32" cy="22" r="14" fill="#f1c27d"/>
+                    <rect x="12" y="36" width="40" height="22" rx="6" fill="#2b2f3a"/>
+                    <path d="M32 38 L26 58 L38 58 Z" fill="#1b8fff"/>
+                    <circle cx="26" cy="20" r="2" fill="#333"/>
+                    <circle cx="38" cy="20" r="2" fill="#333"/>
+                    <path d="M26 26 q6 6 12 0" stroke="#333" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
+            <div class="bubble">Espero no te hayas vacunado, porque los virus no existen</div>
+        </div>
+    </div>
+
+    <audio id="bgMusic" loop src="background_music.mp3"></audio>
+
+    <script>
+    // --- Setup canvas ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W = canvas.width, H = canvas.height;
+    function resize(){
+        const ratio = window.devicePixelRatio || 1;
+        W = canvas.clientWidth = Math.max(420, window.innerWidth);
+        H = canvas.clientHeight = Math.max(320, window.innerHeight);
+        canvas.width = Math.floor(W * ratio);
+        canvas.height = Math.floor(H * ratio);
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    // resize background only if bgCanvas exists
+        if (typeof resizeBg === 'function') resizeBg();
+        // ensure player stays visible after resize
+        try{
+            player.x = Math.max(player.radius, Math.min(W - player.radius, player.x));
+            player.y = Math.max(player.radius, Math.min(H - player.radius, H - 90));
+        }catch(e){ /* player may not be defined yet */ }
+    }
+    window.addEventListener('resize', resize);
+    // resize will be called after background canvas is initialized
+
+    // --- UI elements ---
+    const scoreEl = document.getElementById('score');
+    const highEl = document.getElementById('high');
+    const startOverlay = document.getElementById('startOverlay');
+    const startBtn = document.getElementById('startBtn');
+    const howBtn = document.getElementById('howBtn');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const retryBtn = document.getElementById('retryBtn');
+    const finalScore = document.getElementById('finalScore');
+
+    // Highscore
+    const HS_KEY = 'corona_strike_high';
+    let highscore = parseInt(localStorage.getItem(HS_KEY) || '0', 10);
+    highEl.textContent = highscore;
+
+    // --- Audio helper (beeps) and ambient music ---
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+    let masterGain, musicNodes = null; // musicNodes: {osc1,osc2,gain}
+    let isMuted = false;
+
+    function ensureAudio(){ if(!audioCtx) audioCtx = new AudioCtx(); if(!masterGain){ masterGain = audioCtx.createGain(); masterGain.gain.value = 1; masterGain.connect(audioCtx.destination);} }
+
+    function beep(freq=440, time=0.08, type='sine', vol=0.08){
+        try{
+            ensureAudio();
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = type; o.frequency.value = freq;
+            g.gain.value = vol * (isMuted?0:1);
+            o.connect(g); g.connect(masterGain);
+            o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + time);
+            o.stop(audioCtx.currentTime + time + 0.02);
+        }catch(e){ /* Audio no disponible */ }
+    }
+
+    function startMusic(){
+    const music = document.getElementById('bgMusic');
+    music.volume = isMuted ? 0 : 0.3;
+    music.play().catch(e => console.log('Audio play failed:', e));
+}
+
+    function stopMusic(){
+        const music = document.getElementById('bgMusic');
+        music.pause();
+        music.currentTime = 0;
+    }
+
+    function setMute(m){ 
+    isMuted = m; 
+    if(masterGain) masterGain.gain.value = m?0:1; 
+    const music = document.getElementById('bgMusic');
+    if(music) music.volume = m ? 0 : 0.3;
+    document.getElementById('muteBtn').textContent = m? '🔇' : '🔈'; 
+}
+
+    // --- Game objects (optimized) ---
+    const IS_MOBILE = /Mobi|Android/i.test(navigator.userAgent);
+    const player = { x: W/2, y: H-90, radius: IS_MOBILE?18:22, vx:0, speed: IS_MOBILE?6:8, score:0, alive:true };
+    // primary arrays (active)
+    let viruses = [];
+    let particles = [];
+    let bullets = [];
+    // pools for reuse to avoid GC
+    const virusPool = [];
+    const particlePool = [];
+    const bulletPool = [];
+    // limits to avoid exploding CPU usage
+    const MAX_VIRUSES = IS_MOBILE ? 20 : 40;
+    const MAX_PARTICLES = IS_MOBILE ? 80 : 180;
+    const MAX_BULLETS = IS_MOBILE ? 8 : 14;
+
+    // background cells - fewer on mobile for performance
+    let backgroundCells = [];
+    const BG_COUNT = IS_MOBILE ? 28 : 60;
+    let spawnTimer = 0;
+    let difficulty = 1;
+    let running = false;
+    let lastTime = 0;
+    let totalSpawned = 0;
+    let totalDestroyed = 0;
+    let currentCityIndex = 0;
+    let cityProgress = 0;
+
+    // Cities and landscapes
+    const cities = [
+        "Madrid", "Barcelona", "Valencia", "Sevilla", "Zaragoza", "Málaga", "Murcia", "Palma", 
+        "Las Palmas", "Bilbao", "Alicante", "Córdoba", "Valladolid", "Vigo", "Gijón", "Hospitalet",
+        "Vitoria", "Granada", "Elche", "Oviedo", "Badalona", "Cartagena", "Terrassa", "Jerez"
+    ];
+
+    // Landscape elements for background
+    let landscapes = [];
+
+    // Touch controls
+    const leftTouch = document.getElementById('leftTouch');
+    const rightTouch = document.getElementById('rightTouch');
+    let touchLeft=false, touchRight=false;
+    leftTouch.addEventListener('pointerdown', ()=> touchLeft=true);
+    leftTouch.addEventListener('pointerup', ()=> touchLeft=false);
+    leftTouch.addEventListener('pointerout', ()=> touchLeft=false);
+    rightTouch.addEventListener('pointerdown', ()=> touchRight=true);
+    rightTouch.addEventListener('pointerup', ()=> touchRight=false);
+    rightTouch.addEventListener('pointerout', ()=> touchRight=false);
+
+    // Keyboard
+    const keys = {left:false,right:false};
+    let canShoot = true; // simple fire-rate limiter
+    addEventListener('keydown', e=>{
+        if(e.key==='ArrowLeft') keys.left=true;
+        if(e.key==='ArrowRight') keys.right=true;
+        if(e.key===' '){
+            if(!running){ startGame(); }
+            else if(player.alive){ e.preventDefault(); shoot(); }
+        }
+    });
+    addEventListener('keyup', e=>{ if(e.key==='ArrowLeft') keys.left=false; if(e.key==='ArrowRight') keys.right=false; });
+
+    // --- Visual helpers ---
+    function rnd(a,b){return a + Math.random()*(b-a)}
+
+    // background floating cells
+    for(let i=0;i<BG_COUNT;i++) backgroundCells.push({x:Math.random()*W,y:Math.random()*H,r: rnd(6,IS_MOBILE?28:40),s: rnd(0.04,IS_MOBILE?0.28:0.6),a: rnd(0.05,0.22)});
+
+    // Initialize landscapes (buildings, skyscrapers, monuments)
+    function initLandscapes(){
+        landscapes = [];
+        for(let i=0; i<20; i++){
+            const buildingTypes = ['building', 'skyscraper', 'monument', 'tower'];
+            landscapes.push({
+                type: buildingTypes[Math.floor(Math.random() * buildingTypes.length)],
+                x: Math.random() * W,
+                y: H - rnd(60, 180),
+                w: rnd(30, 120),
+                h: rnd(50, 200),
+                color: Math.random() > 0.5 ? 'rgba(80,90,110,0.6)' : 'rgba(60,70,90,0.5)',
+                roofColor: Math.random() > 0.5 ? 'rgba(120,100,80,0.7)' : 'rgba(100,80,60,0.6)',
+                speed: rnd(0.3, 1.2)
+            });
+        }
+    }
+
+    // offscreen canvas for background to avoid re-drawing heavy shapes each frame
+    const bgCanvas = document.createElement('canvas'); const bgCtx = bgCanvas.getContext('2d');
+    function resizeBg(){ bgCanvas.width = W; bgCanvas.height = H; renderBg(); }
+    function renderBg(){
+        // redraw entire background onto offscreen canvas
+        const g = bgCtx.createLinearGradient(0,0,0,H);
+        g.addColorStop(0,'rgba(8,18,28,0.85)'); g.addColorStop(1,'rgba(0,6,10,0.95)');
+        bgCtx.fillStyle = g; bgCtx.fillRect(0,0,W,H);
+        
+        // Draw city landscapes
+        for(const l of landscapes){
+            if(l.type === 'building'){
+                // Main building
+                bgCtx.fillStyle = l.color;
+                bgCtx.fillRect(l.x, l.y, l.w, l.h);
+                // Roof
+                bgCtx.fillStyle = l.roofColor;
+                bgCtx.fillRect(l.x - 2, l.y - 5, l.w + 4, 8);
+                // Windows in grid pattern
+                bgCtx.fillStyle = 'rgba(255,255,180,0.4)';
+                const windowsX = Math.floor(l.w / 12);
+                const windowsY = Math.floor(l.h / 15);
+                for(let i=0; i<windowsX; i++){
+                    for(let j=0; j<windowsY; j++){
+                        if(Math.random() > 0.6) {
+                            bgCtx.fillRect(l.x + 4 + i*12, l.y + 8 + j*15, 8, 10);
+                        }
+                    }
+                }
+            } else if(l.type === 'skyscraper'){
+                // Tall building with antenna
+                bgCtx.fillStyle = l.color;
+                bgCtx.fillRect(l.x, l.y, l.w, l.h);
+                // Antenna
+                bgCtx.fillStyle = 'rgba(150,150,150,0.8)';
+                bgCtx.fillRect(l.x + l.w/2 - 1, l.y - 20, 2, 20);
+                // Many windows
+                bgCtx.fillStyle = 'rgba(255,255,200,0.5)';
+                for(let i=0; i<Math.floor(l.w/8); i++){
+                    for(let j=0; j<Math.floor(l.h/10); j++){
+                        if(Math.random() > 0.4) {
+                            bgCtx.fillRect(l.x + 2 + i*8, l.y + 4 + j*10, 6, 8);
+                        }
+                    }
+                }
+            } else if(l.type === 'monument'){
+                // Monument/cathedral style
+                bgCtx.fillStyle = 'rgba(120,110,100,0.7)';
+                bgCtx.fillRect(l.x, l.y, l.w, l.h);
+                // Dome/spire
+                bgCtx.beginPath();
+                bgCtx.arc(l.x + l.w/2, l.y, l.w/3, 0, Math.PI, true);
+                bgCtx.fill();
+                // Cross or spire top
+                bgCtx.fillStyle = 'rgba(180,160,140,0.8)';
+                bgCtx.fillRect(l.x + l.w/2 - 1, l.y - l.w/3 - 10, 2, 10);
+            } else if(l.type === 'tower'){
+                // Tower with cylindrical shape
+                bgCtx.fillStyle = 'rgba(100,90,80,0.6)';
+                bgCtx.fillRect(l.x, l.y, l.w, l.h);
+                // Tower top
+                bgCtx.fillStyle = 'rgba(140,120,100,0.7)';
+                bgCtx.beginPath();
+                bgCtx.moveTo(l.x, l.y);
+                bgCtx.lineTo(l.x + l.w/2, l.y - 15);
+                bgCtx.lineTo(l.x + l.w, l.y);
+                bgCtx.fill();
+                // Small windows
+                bgCtx.fillStyle = 'rgba(255,255,150,0.3)';
+                for(let j=0; j<Math.floor(l.h/20); j++){
+                    if(Math.random() > 0.7) {
+                        bgCtx.fillRect(l.x + l.w/2 - 3, l.y + 10 + j*20, 6, 8);
+                    }
+                }
+            }
+        }
+        
+        for(const c of backgroundCells){ bgCtx.beginPath(); bgCtx.fillStyle = `rgba(40,120,180,${c.a})`; bgCtx.ellipse(c.x, c.y, c.r, c.r*0.6, 0, 0, Math.PI*2); bgCtx.fill(); }
+    }
+    
+    initLandscapes();
+    resizeBg();
+    // now that bgCanvas exists, initialize sizes
+    resize();
+
+    function spawnVirus(){
+        if(viruses.length >= MAX_VIRUSES) return;
+        const size = rnd(IS_MOBILE?14:18, IS_MOBILE?34:42);
+        let v = virusPool.pop();
+        if(!v) v = {};
+        v.x = rnd(size, W - size); v.y = -50; v.r = size;
+        v.speed = rnd(1.2, 2.2) * (1 + difficulty*0.12);
+        v.rot = Math.random()*Math.PI*2; v.spin = rnd(-0.02,0.02);
+        viruses.push(v);
+        totalSpawned++;
+    }
+
+    function createParticles(x,y,color,count=18){
+        // cap overall particles
+        count = Math.min(count, Math.max(6, Math.floor(MAX_PARTICLES/6)));
+        for(let i=0;i<count;i++){
+            if(particles.length >= MAX_PARTICLES) break;
+            let p = particlePool.pop(); if(!p) p = {};
+            p.x = x; p.y = y; p.vx = Math.cos(i/count*Math.PI*2)*rnd(1,4); p.vy = Math.sin(i/count*Math.PI*2)*rnd(1,4);
+            p.life = rnd(40,90); p.col = color; p.r = rnd(1,Math.min(3,2 + (IS_MOBILE?0:1)));
+            particles.push(p);
+        }
+    }
+
+    // collision
+    function checkCollision(v){
+        const dx = v.x - player.x; const dy = v.y - player.y; const d = Math.hypot(dx,dy);
+        return d < (v.r + player.radius - 6);
+    }
+
+    // --- Draw shapes ---
+    function drawBackground(){
+        // draw pre-rendered background
+        ctx.drawImage(bgCanvas, 0, 0, W, H);
+    }
+
+    function drawPlayer(){
+        // glow
+        const grd = ctx.createRadialGradient(player.x, player.y, player.radius*0.2, player.x, player.y, player.radius*2.2);
+        grd.addColorStop(0,'rgba(120,255,150,0.95)'); grd.addColorStop(1,'rgba(0,220,100,0.02)');
+        ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(player.x,player.y,player.radius*1.6,0,Math.PI*2); ctx.fill();
+
+        // shield core
+        ctx.beginPath(); ctx.fillStyle = '#06d65f'; ctx.arc(player.x,player.y,player.radius,0,Math.PI*2); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.stroke();
+        // cross symbol
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(player.x-6, player.y-2, 12,4); ctx.fillRect(player.x-2, player.y-6,4,12);
+    }
+
+    function drawBullets(){
+        ctx.fillStyle = '#9ef5ff';
+        for(const b of bullets){
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+
+    function drawVirus(v){
+        ctx.save(); ctx.translate(v.x,v.y); ctx.rotate(v.rot);
+        // core gradient
+        const g = ctx.createRadialGradient(0,0,v.r*0.1,0,0,v.r);
+        g.addColorStop(0,'#ff9ea0'); g.addColorStop(0.6,'#ff5a5a'); g.addColorStop(1,'#7b0000');
+        // spikes
+        for(let i=0;i<10;i++){
+            const a = i/10*Math.PI*2;
+            const sx = Math.cos(a)*(v.r+6);
+            const sy = Math.sin(a)*(v.r+6);
+            ctx.beginPath(); ctx.moveTo(Math.cos(a)*(v.r-6), Math.sin(a)*(v.r-6)); ctx.lineTo(sx,sy); ctx.lineWidth=4; ctx.strokeStyle='rgba(255,110,110,0.95)'; ctx.stroke();
+            // spine tip
+            ctx.beginPath(); ctx.fillStyle='rgba(255,140,140,0.98)'; ctx.arc(sx,sy,4,0,Math.PI*2); ctx.fill();
+        }
+        ctx.beginPath(); ctx.fillStyle=g; ctx.arc(0,0,v.r,0,Math.PI*2); ctx.fill();
+        // small nucleus
+        ctx.beginPath(); ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.arc(-v.r*0.3,-v.r*0.2,v.r*0.28,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    function drawParticles(){
+        for(const p of particles){ ctx.beginPath(); ctx.fillStyle = p.col; ctx.globalAlpha = Math.max(0, p.life/100); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
+        ctx.globalAlpha = 1;
+    }
+
+    // --- Update loop ---
+    function update(dt){
+        // background cells drift
+        for(const c of backgroundCells){ c.y -= c.s*dt*0.05; if(c.y < -60) c.y = H + 60; }
+
+        // landscapes movement
+        for(const l of landscapes){ 
+            l.y += l.speed * dt/16; 
+            if(l.y > H + 50) { 
+                l.y = -l.h - 50; 
+                l.x = Math.random() * W;
+                const buildingTypes = ['building', 'skyscraper', 'monument', 'tower'];
+                l.type = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
+                l.w = rnd(30, 120);
+                l.h = rnd(50, 200);
+                l.color = Math.random() > 0.5 ? 'rgba(80,90,110,0.6)' : 'rgba(60,70,90,0.5)';
+                l.roofColor = Math.random() > 0.5 ? 'rgba(120,100,80,0.7)' : 'rgba(100,80,60,0.6)';
+            }
+        }
+
+        // City progression
+        cityProgress += dt/16;
+        if(cityProgress > 200){ // Change city every ~200 time units
+            cityProgress = 0;
+            currentCityIndex = (currentCityIndex + 1) % cities.length;
+            document.querySelector('#cityInfo .city').textContent = cities[currentCityIndex];
+            renderBg(); // Re-render background with new landscape
+        }
+
+        // input
+        const movingLeft = keys.left || touchLeft;
+        const movingRight = keys.right || touchRight;
+        if(movingLeft) player.vx = -player.speed; else if(movingRight) player.vx = player.speed; else player.vx *= 0.86;
+        player.x += player.vx * dt/16;
+        player.x = Math.max(player.radius, Math.min(W - player.radius, player.x));
+
+        // spawn
+        spawnTimer += dt/16;
+        if(spawnTimer > Math.max(8 - difficulty*0.6, 2.2)){
+            spawnTimer = 0; spawnVirus();
+        }
+
+        // viruses (iterate backwards for removal)
+        for(let i = viruses.length-1;i>=0;i--){
+            const v = viruses[i];
+            v.y += v.speed * dt/16; v.rot += v.spin * dt/16;
+            if(player.alive && checkCollision(v)){
+                player.alive = false; beep(120,0.35,'sawtooth',0.15); createParticles(player.x, player.y, 'rgba(255,80,80,0.98)', 30);
+                createParticles(v.x, v.y, 'rgba(255,140,140,0.98)', 20);
+                gameOver();
+                // recycle collided virus
+                const rem = viruses.splice(i,1)[0]; virusPool.push(rem);
+                continue;
+            }
+            if(v.y - v.r > H){ // passed
+                const rem = viruses.splice(i,1)[0]; virusPool.push(rem);
+                player.score += 1; scoreEl.textContent = player.score;
+                beep(880 - Math.min(600, player.score*8),0.05,'sine',0.04);
+                if(player.score % 10 === 0) { difficulty += 0.6; }
+            }
+        }
+
+    // particles (limited updates)
+    const pLen = particles.length;
+    for(let i=pLen-1;i>=0;i--){ const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= dt/2; if(p.life<=0){ const rem = particles.splice(i,1)[0]; particlePool.push(rem); } }
+    }
+
+    function draw(){
+        ctx.clearRect(0,0,W,H);
+        drawBackground();
+        drawBullets();
+        for(const v of viruses) drawVirus(v);
+        drawParticles();
+        drawPlayer();
+    }
+
+    function loop(ts){
+        if(!lastTime) lastTime = ts; const dt = Math.min(40, ts - lastTime); lastTime = ts;
+        if(running){ update(dt); draw(); requestAnimationFrame(loop); }
+    }
+
+    // --- Game control ---
+    function startGame(){
+        // reset
+        viruses = []; particles = []; bullets = []; player.score = 0; scoreEl.textContent = '0'; player.x = W/2; player.alive = true; difficulty = 1; spawnTimer=0;
+        totalSpawned = 0; totalDestroyed = 0; currentCityIndex = 0; cityProgress = 0;
+        player.y = H - 90;
+        document.querySelector('#cityInfo .city').textContent = cities[0];
+        document.querySelector('#cityInfo .progress').textContent = 'Batalla en progreso...';
+        initLandscapes();
+        renderBg();
+        startOverlay.style.display='none'; gameOverOverlay.style.display='none'; pauseOverlay.style.display='none'; running = true; lastTime = 0; ensureAudio(); startMusic(); beep(880,0.08,'sine',0.06);
+        requestAnimationFrame(loop);
+    }
+
+    function gameOver(){
+        running = false; finalScore.textContent = player.score; gameOverOverlay.style.display='flex'; document.getElementById('goMsg').innerHTML = `Terminaste. Puntuación: <strong>${player.score}</strong>`;
+        stopMusic();
+        if(player.score > highscore){ highscore = player.score; localStorage.setItem(HS_KEY, String(highscore)); highEl.textContent = highscore; document.getElementById('goTitle').textContent = '¡Nuevo Récord!'; }
+        else{ document.getElementById('goTitle').textContent = 'Game Over'; }
+
+        // Calculate percentage and award
+        const percentage = totalSpawned > 0 ? Math.round((totalDestroyed / totalSpawned) * 100) : 0;
+        let award = '';
+        if (percentage < 30) {
+            award = 'Novato Anti-Vacunas';
+        } else if (percentage < 60) {
+            award = 'Luchador Contra el Sistema';
+        } else if (percentage < 90) {
+            award = 'Guerrero de la Verdad';
+        } else {
+            award = 'Maestro de la Conspiración';
+        }
+        document.getElementById('goMsg').innerHTML += `<br>Porcentaje de virus destruidos: ${percentage}%<br>Premio: <strong>${award}</strong>`;
+    }
+
+    function stopToMenu(){ // detener y volver al menú
+        running = false; stopMusic(); startOverlay.style.display='flex'; gameOverOverlay.style.display='none'; pauseOverlay.style.display='none';
+    }
+
+    function togglePause(){
+        if(!running && player.alive){ // currently paused
+            // resume
+            running = true; pauseOverlay.style.display='none'; lastTime = 0; requestAnimationFrame(loop); beep(660,0.06,'sine',0.04);
+        } else if(running){
+            running = false; pauseOverlay.style.display='flex'; beep(220,0.06,'sine',0.04);
+        }
+    }
+
+    // --- Events ---
+    startBtn.addEventListener('click', ()=> startGame());
+    retryBtn.addEventListener('click', ()=> startGame());
+    howBtn.addEventListener('click', ()=> alert('Usa flechas o toca los botones inferiores para mover; evita los virus que caen. Marca la mayor puntuación.'));
+    document.getElementById('shareBtn').addEventListener('click', ()=>{
+        try{ navigator.clipboard.writeText(`Mi puntuación en Corona Strike: ${player.score}`); alert('Puntuación copiada al portapapeles'); }catch(e){ alert('No se pudo copiar.'); }
+    });
+
+    // Pause / Stop / Mute buttons
+    document.getElementById('pauseBtn').addEventListener('click', ()=> togglePause());
+    document.getElementById('resumeBtn').addEventListener('click', ()=> togglePause());
+    document.getElementById('stopBtn').addEventListener('click', ()=> stopToMenu());
+    document.getElementById('stopFromPause').addEventListener('click', ()=> stopToMenu());
+    document.getElementById('muteBtn').addEventListener('click', ()=> setMute(!isMuted));
+
+    // keyboard shortcuts
+    addEventListener('keydown', e=>{ if(e.key==='p' || e.key==='P') togglePause(); if(e.key==='m' || e.key==='M') setMute(!isMuted); });
+
+    // allow clicking canvas to resume audio context on some browsers
+    canvas.addEventListener('pointerdown', ()=>{
+        if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if(running && player.alive) shoot();
+    });
+
+    // pause when tab not visible (save CPU)
+    document.addEventListener('visibilitychange', ()=>{
+        if(document.hidden){ if(running) { running = false; pauseOverlay.style.display='flex'; } }
+        else { if(player.alive && !running && startOverlay.style.display==='none' && gameOverOverlay.style.display==='none'){ running = true; pauseOverlay.style.display='none'; lastTime = 0; requestAnimationFrame(loop); } }
+    });
+
+    // --- Shooting mechanics ---
+    function shoot(){
+        if(!canShoot) return;
+        if(bullets.length >= MAX_BULLETS) return;
+        canShoot = false; setTimeout(()=> canShoot = true, IS_MOBILE?180:130);
+        let b = bulletPool.pop(); if(!b) b = {};
+        b.x = player.x; b.y = player.y - player.radius - 6; b.vy = -10; b.r = 4;
+        bullets.push(b);
+        beep(740,0.05,'square',0.05);
+    }
+
+    const politicoMessages = [
+        "Espero no te hayas vacunado, porque los virus no existen",
+        "Las vacunas crean enfermedades",
+        "Busca a un abogado cuando quieran vacunar a tus niños por la fuerza",
+        "No creas todo lo que ves en la TV"
+    ];
+
+    function showPolitico(){
+        const el = document.getElementById('politicoMsg');
+        const bubble = el.querySelector('.bubble');
+        bubble.textContent = politicoMessages[Math.floor(Math.random() * politicoMessages.length)];
+        el.classList.add('show');
+        clearTimeout(showPolitico._t);
+        showPolitico._t = setTimeout(()=> el.classList.remove('show'), 2800);
+    }
+
+    // integrate bullets into update loop by augmenting update()
+    const _origUpdate = update;
+    update = function(dt){
+        // move bullets
+        for(let i=bullets.length-1;i>=0;i--){
+            const b = bullets[i];
+            b.y += b.vy * dt/16;
+            if(b.y < -20){ const rem = bullets.splice(i,1)[0]; bulletPool.push(rem); continue; }
+        }
+        // bullet-virus collisions
+        for(let i=viruses.length-1;i>=0;i--){
+            const v = viruses[i];
+            for(let j=bullets.length-1;j>=0;j--){
+                const b = bullets[j];
+                const dx = v.x - b.x; const dy = v.y - b.y; const d2 = dx*dx + dy*dy;
+                if(d2 < (v.r+b.r)*(v.r+b.r)){
+                    // hit
+                    const remV = viruses.splice(i,1)[0]; virusPool.push(remV);
+                    const remB = bullets.splice(j,1)[0]; bulletPool.push(remB);
+                    createParticles(v.x, v.y, 'rgba(255,200,120,0.98)', 28);
+                    beep(220,0.07,'triangle',0.08);
+                    player.score += 3; scoreEl.textContent = player.score;
+                    totalDestroyed++;
+                    if(player.score % 12 === 0) { difficulty += 0.4; }
+                    showPolitico();
+                    break;
+                }
+            }
+        }
+        // proceed with original update for movement, spawns, collisions, etc.
+        _origUpdate(dt);
+    }
+
+    // initial draw
+    drawBackground(); drawPlayer();
+    </script>
+</body>
+</html>
