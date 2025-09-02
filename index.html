@@ -437,17 +437,23 @@
     const leftTouch = document.getElementById('leftTouch');
     const rightTouch = document.getElementById('rightTouch');
     let touchLeft=false, touchRight=false;
-    leftTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); touchLeft=true; }, {passive:false});
-    leftTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); touchLeft=false; }, {passive:false});
-    leftTouch.addEventListener('pointerout', ()=> touchLeft=false);
+    // Prevent pointer events from propagating to the canvas (stop accidental movement)
+    leftTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.stopPropagation(); touchLeft=true; }, {passive:false});
+    leftTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); e.stopPropagation(); touchLeft=false; }, {passive:false});
+    leftTouch.addEventListener('pointerleave', ()=> touchLeft=false);
     leftTouch.addEventListener('pointercancel', ()=> touchLeft=false);
-    rightTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); touchRight=true; }, {passive:false});
-    rightTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); touchRight=false; }, {passive:false});
-    rightTouch.addEventListener('pointerout', ()=> touchRight=false);
+    rightTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.stopPropagation(); touchRight=true; }, {passive:false});
+    rightTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); e.stopPropagation(); touchRight=false; }, {passive:false});
+    rightTouch.addEventListener('pointerleave', ()=> touchRight=false);
     rightTouch.addEventListener('pointercancel', ()=> touchRight=false);
 
     // Touch anywhere on the canvas: move left/right by half-split (mobile/pen)
     let screenPointerId = null;
+    // Tap detection to allow shooting on short taps
+    let touchTapStart = null; // {id, x, y, t}
+    const TAP_MAX_DIST = 14; // pixels
+    const TAP_MAX_TIME = 280; // ms
+
     function onScreenPointerDown(e){
         // ignore if tapping the UI buttons
         if(e.target.closest && e.target.closest('#touchButtons')) return;
@@ -457,6 +463,11 @@
         const relX = e.clientX - rect.left;
         const goLeft = relX < rect.width/2;
         touchLeft = goLeft; touchRight = !goLeft;
+
+        // start tap tracking (only for touch/pen)
+        if(e.pointerType !== 'mouse'){
+            touchTapStart = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
+        }
     }
     function onScreenPointerMove(e){
         if(screenPointerId===null || e.pointerId !== screenPointerId) return;
@@ -464,10 +475,28 @@
         const relX = e.clientX - rect.left;
         const goLeft = relX < rect.width/2;
         touchLeft = goLeft; touchRight = !goLeft;
+
+        // cancel tap if moved too far
+        if(touchTapStart && touchTapStart.id === e.pointerId){
+            const dx = e.clientX - touchTapStart.x; const dy = e.clientY - touchTapStart.y;
+            if(Math.hypot(dx,dy) > TAP_MAX_DIST) touchTapStart = null;
+        }
     }
     function onScreenPointerUp(e){
+        // if this was a quick tap, treat as a shoot action
+        if(touchTapStart && touchTapStart.id === e.pointerId){
+            const dt = performance.now() - touchTapStart.t;
+            const dx = e.clientX - touchTapStart.x; const dy = e.clientY - touchTapStart.y;
+            const dist = Math.hypot(dx,dy);
+            if(dist <= TAP_MAX_DIST && dt <= TAP_MAX_TIME){
+                if(!running){ startGame(); }
+                else if(player.alive){
+                    shoot();
+                }
+            }
+        }
         if(screenPointerId===null || e.pointerId !== screenPointerId) return;
-        touchLeft = false; touchRight = false; screenPointerId = null;
+        touchLeft = false; touchRight = false; screenPointerId = null; touchTapStart = null;
     }
 
     // Keyboard
@@ -866,6 +895,32 @@
     canvas.addEventListener('pointermove', (e)=>{ onScreenPointerMove(e); }, {passive:true});
     canvas.addEventListener('pointerup', (e)=>{ onScreenPointerUp(e); }, {passive:true});
     canvas.addEventListener('pointercancel', (e)=>{ onScreenPointerUp(e); }, {passive:true});
+
+    // Fallback for older browsers that don't support Pointer Events (use first touch)
+    if(!window.PointerEvent){
+        canvas.addEventListener('touchstart', function(te){
+            if(te.touches && te.touches.length>0){
+                const t = te.touches[0];
+                // synth object similar to pointer event
+                const se = { pointerId: 1, clientX: t.clientX, clientY: t.clientY, pointerType: 'touch', preventDefault: ()=> te.preventDefault() };
+                if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                onScreenPointerDown(se);
+            }
+        }, {passive:false});
+        canvas.addEventListener('touchmove', function(te){
+            if(te.touches && te.touches.length>0){
+                const t = te.touches[0];
+                const se = { pointerId: 1, clientX: t.clientX, clientY: t.clientY };
+                onScreenPointerMove(se);
+            }
+        }, {passive:false});
+        canvas.addEventListener('touchend', function(te){
+            // use changedTouches or fallback
+            const t = (te.changedTouches && te.changedTouches[0]) || null;
+            const se = t ? { pointerId: 1, clientX: t.clientX, clientY: t.clientY } : { pointerId: 1 };
+            onScreenPointerUp(se);
+        }, {passive:false});
+    }
 
     // Prevent long-press context menus on mobile
     window.addEventListener('contextmenu', (e)=>{ if(IS_MOBILE) e.preventDefault(); });
