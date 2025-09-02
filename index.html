@@ -35,7 +35,11 @@
         .btn{display:inline-block;background:var(--accent);color:white;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;cursor:pointer}
         .small{background:rgba(255,255,255,0.06);padding:8px;border-radius:8px;margin-left:8px}
         #touchButtons{position:fixed;left:12px;bottom:18px;z-index:25;display:flex;gap:8px}
-        .touch{width:80px;height:60px;background:rgba(255,255,255,0.06);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ui);font-weight:700}
+        .touch{width:80px;height:60px;background:rgba(255,255,255,0.06);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ui);font-weight:700;user-select:none;-webkit-user-select:none;touch-action:none}
+        /* Prevent scrolling/zooming while interacting with the game */
+        canvas, body { touch-action: none; }
+        /* Hide touch buttons on desktop (pointer fine/hover available) */
+        @media (hover: hover) and (pointer: fine){ #touchButtons { display:none; } }
         .credit{position:fixed;right:18px;bottom:10px;color:rgba(255,255,255,0.6);font-size:12px}
         /* small devices */
         @media (max-width:600px){.menu{margin:18px;width:92%}.btn{padding:12px 20px}}
@@ -47,12 +51,124 @@
         #politicoMsg .bubble{font-size:15px;line-height:1.35}
         #politicoMsg.show{opacity:1;transform:translateX(-50%) translateY(0);transition:opacity .35s ease, transform .35s ease}
         @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        
+        /* Doctor Card Modal Styles */
+        .card-modal{
+            background:rgba(20,20,30,0.95);
+            backdrop-filter:blur(8px);
+            padding:30px;
+            border-radius:20px;
+            color:var(--ui);
+            text-align:center;
+            max-width:500px;
+            width:90%;
+            max-height:90vh;
+            overflow-y:auto;
+            box-shadow:0 20px 40px rgba(0,0,0,0.8);
+            border:2px solid #4CAF50;
+        }
+        
+        .card-buttons{
+            display:flex;
+            flex-direction:column;
+            gap:12px;
+            margin-top:20px;
+            align-items:center;
+        }
+        
+        .card-btn{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            padding:14px 24px;
+            border:none;
+            border-radius:12px;
+            font-family:Inter, Arial, sans-serif;
+            font-size:16px;
+            font-weight:600;
+            cursor:pointer;
+            transition:all 0.3s ease;
+            min-width:200px;
+            text-align:center;
+            box-shadow:0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .download-btn{
+            background:linear-gradient(135deg, #4CAF50, #45a049);
+            color:white;
+        }
+        
+        .download-btn:hover{
+            background:linear-gradient(135deg, #45a049, #3d8b40);
+            transform:translateY(-2px);
+            box-shadow:0 6px 16px rgba(76,175,80,0.4);
+        }
+        
+        .share-btn{
+            background:linear-gradient(135deg, #2196F3, #1976D2);
+            color:white;
+        }
+        
+        .share-btn:hover{
+            background:linear-gradient(135deg, #1976D2, #1565C0);
+            transform:translateY(-2px);
+            box-shadow:0 6px 16px rgba(33,150,243,0.4);
+        }
+        
+        .close-btn{
+            background:linear-gradient(135deg, #757575, #616161);
+            color:white;
+        }
+        
+        .close-btn:hover{
+            background:linear-gradient(135deg, #616161, #424242);
+            transform:translateY(-2px);
+            box-shadow:0 6px 16px rgba(117,117,117,0.4);
+        }
+        
+        /* Desktop layout */
+        @media (min-width: 768px) {
+            .card-buttons{
+                flex-direction:row;
+                justify-content:center;
+                flex-wrap:wrap;
+            }
+            
+            .card-btn{
+                min-width:160px;
+                flex:0 0 auto;
+            }
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 600px) {
+            .card-modal{
+                padding:20px;
+                margin:10px;
+                width:calc(100% - 20px);
+            }
+            
+            .card-btn{
+                font-size:15px;
+                padding:12px 20px;
+                min-width:180px;
+            }
+            
+            #doctorCard{
+                max-width:100%;
+                height:auto;
+            }
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="container">
         <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    </div>
+    <!-- Toast when destroying a syringe -->
+    <div id="syringeMsg" style="position:fixed;left:50%;top:66px;transform:translateX(-50%) translateY(-16px);opacity:0;pointer-events:none;z-index:40;display:block">
+        <div style="background:rgba(0,0,0,0.7);color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,0.5);backdrop-filter:blur(6px);font-size:14px">Has salvado a un niño de autismo</div>
     </div>
 
     <div id="ui">
@@ -89,6 +205,20 @@
             <div>
                 <button id="retryBtn" class="btn">Reintentar</button>
                 <button id="shareBtn" class="small">Guardar/Compartir</button>
+                <button id="cardBtn" class="btn" style="background:#4CAF50;margin-top:10px">🏆 Crear Tarjeta de Médico</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doctor Card Modal -->
+    <div id="cardOverlay" class="overlay" style="display:none;pointer-events:auto;background:rgba(0,0,0,0.9)">
+        <div class="card-modal">
+            <h1 style="color:#4CAF50;margin:0 0 20px 0;text-align:center">🏆 Tarjeta de Médico por la Verdad</h1>
+            <canvas id="doctorCard" width="400" height="600" style="border:3px solid #4CAF50;border-radius:15px;background:linear-gradient(135deg,#1e3c72,#2a5298);margin:0 auto 20px auto;display:block"></canvas>
+            <div class="card-buttons">
+                <button id="downloadCard" class="card-btn download-btn">📱 Descargar Tarjeta</button>
+                <button id="shareCard" class="card-btn share-btn">📤 Compartir</button>
+                <button id="closeCard" class="card-btn close-btn">✖ Cerrar</button>
             </div>
         </div>
     </div>
@@ -217,22 +347,77 @@
     let viruses = [];
     let particles = [];
     let bullets = [];
+    let syringes = [];
     // pools for reuse to avoid GC
     const virusPool = [];
     const particlePool = [];
     const bulletPool = [];
+    const syringePool = [];
     // limits to avoid exploding CPU usage
     const MAX_VIRUSES = IS_MOBILE ? 20 : 40;
     const MAX_PARTICLES = IS_MOBILE ? 80 : 180;
     const MAX_BULLETS = IS_MOBILE ? 8 : 14;
+    const MAX_SYRINGES = IS_MOBILE ? 3 : 6;
 
     // background cells - fewer on mobile for performance
     let backgroundCells = [];
     const BG_COUNT = IS_MOBILE ? 28 : 60;
     let spawnTimer = 0;
+    let syringeSpawnTimer = 0;
     let difficulty = 1;
     let running = false;
     let lastTime = 0;
+
+    // --- Syringe helpers ---
+    function spawnSyringe(){
+        if(syringes.length >= MAX_SYRINGES) return;
+        const size = rnd(IS_MOBILE?12:14, IS_MOBILE?20:24);
+        let s = syringePool.pop();
+        if(!s) s = {};
+        s.x = rnd(size + 10, W - (size + 10));
+        s.y = -40;
+        s.r = size; // collision radius
+        s.speed = rnd(1.6, 2.6) * (1 + difficulty*0.12);
+        s.rot = rnd(-0.2, 0.2);
+        s.spin = rnd(-0.01, 0.01);
+        syringes.push(s);
+    }
+
+    function drawSyringe(s){
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.rot);
+        // Barrel
+        ctx.fillStyle = 'rgba(160,220,255,0.9)';
+        ctx.fillRect(-s.r*0.5, -s.r*1.1, s.r, s.r*2.2);
+        // Plunger
+        ctx.fillStyle = 'rgba(210,230,255,0.9)';
+        ctx.fillRect(-s.r*0.6, -s.r*1.35, s.r*1.2, s.r*0.3);
+        // Needle
+        ctx.fillStyle = '#c0c7d1';
+        ctx.beginPath();
+        ctx.moveTo(0, s.r*1.1);
+        ctx.lineTo(-2, s.r*1.7);
+        ctx.lineTo(2, s.r*1.7);
+        ctx.closePath();
+        ctx.fill();
+        // Small shine
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(-s.r*0.2, -s.r*0.9, s.r*0.12, s.r*1.6);
+        ctx.restore();
+    }
+
+    function showSyringeSaved(){
+        const el = document.getElementById('syringeMsg');
+        if(!el) return;
+        el.style.opacity = '1';
+        el.style.transform = 'translateX(-50%) translateY(0)';
+        clearTimeout(showSyringeSaved._t);
+        showSyringeSaved._t = setTimeout(()=>{
+            el.style.opacity = '0';
+            el.style.transform = 'translateX(-50%) translateY(-16px)';
+        }, 2200);
+    }
     let totalSpawned = 0;
     let totalDestroyed = 0;
     let currentCityIndex = 0;
@@ -252,12 +437,38 @@
     const leftTouch = document.getElementById('leftTouch');
     const rightTouch = document.getElementById('rightTouch');
     let touchLeft=false, touchRight=false;
-    leftTouch.addEventListener('pointerdown', ()=> touchLeft=true);
-    leftTouch.addEventListener('pointerup', ()=> touchLeft=false);
+    leftTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); touchLeft=true; }, {passive:false});
+    leftTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); touchLeft=false; }, {passive:false});
     leftTouch.addEventListener('pointerout', ()=> touchLeft=false);
-    rightTouch.addEventListener('pointerdown', ()=> touchRight=true);
-    rightTouch.addEventListener('pointerup', ()=> touchRight=false);
+    leftTouch.addEventListener('pointercancel', ()=> touchLeft=false);
+    rightTouch.addEventListener('pointerdown', (e)=>{ e.preventDefault(); touchRight=true; }, {passive:false});
+    rightTouch.addEventListener('pointerup', (e)=>{ e.preventDefault(); touchRight=false; }, {passive:false});
     rightTouch.addEventListener('pointerout', ()=> touchRight=false);
+    rightTouch.addEventListener('pointercancel', ()=> touchRight=false);
+
+    // Touch anywhere on the canvas: move left/right by half-split (mobile/pen)
+    let screenPointerId = null;
+    function onScreenPointerDown(e){
+        // ignore if tapping the UI buttons
+        if(e.target.closest && e.target.closest('#touchButtons')) return;
+        screenPointerId = e.pointerId;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const relX = e.clientX - rect.left;
+        const goLeft = relX < rect.width/2;
+        touchLeft = goLeft; touchRight = !goLeft;
+    }
+    function onScreenPointerMove(e){
+        if(screenPointerId===null || e.pointerId !== screenPointerId) return;
+        const rect = canvas.getBoundingClientRect();
+        const relX = e.clientX - rect.left;
+        const goLeft = relX < rect.width/2;
+        touchLeft = goLeft; touchRight = !goLeft;
+    }
+    function onScreenPointerUp(e){
+        if(screenPointerId===null || e.pointerId !== screenPointerId) return;
+        touchLeft = false; touchRight = false; screenPointerId = null;
+    }
 
     // Keyboard
     const keys = {left:false,right:false};
@@ -505,6 +716,31 @@
         if(spawnTimer > Math.max(8 - difficulty*0.6, 2.2)){
             spawnTimer = 0; spawnVirus();
         }
+        // syringe spawn (rarer)
+        syringeSpawnTimer += dt/16;
+        if(syringeSpawnTimer > Math.max(22 - difficulty*0.8, 8)){
+            syringeSpawnTimer = 0; spawnSyringe();
+        }
+
+        // syringes movement and collisions
+        for(let i = syringes.length-1; i>=0; i--){
+            const s = syringes[i];
+            s.y += s.speed * dt/16; s.rot += s.spin * dt/16;
+            if(player.alive){
+                const dx = s.x - player.x; const dy = s.y - player.y; const d = Math.hypot(dx,dy);
+                if(d < (s.r + player.radius - 6)){
+                    // same effect as virus collision
+                    player.alive = false; beep(120,0.35,'sawtooth',0.15); createParticles(player.x, player.y, 'rgba(255,80,80,0.98)', 30);
+                    createParticles(s.x, s.y, 'rgba(180,220,255,0.98)', 24);
+                    const remS = syringes.splice(i,1)[0]; syringePool.push(remS);
+                    gameOver();
+                    continue;
+                }
+            }
+            if(s.y - s.r > H){
+                const remS = syringes.splice(i,1)[0]; syringePool.push(remS);
+            }
+        }
 
         // viruses (iterate backwards for removal)
         for(let i = viruses.length-1;i>=0;i--){
@@ -535,6 +771,7 @@
         ctx.clearRect(0,0,W,H);
         drawBackground();
         drawBullets();
+        for(const s of syringes) drawSyringe(s);
         for(const v of viruses) drawVirus(v);
         drawParticles();
         drawPlayer();
@@ -548,9 +785,14 @@
     // --- Game control ---
     function startGame(){
         // reset
-        viruses = []; particles = []; bullets = []; player.score = 0; scoreEl.textContent = '0'; player.x = W/2; player.alive = true; difficulty = 1; spawnTimer=0;
+        viruses = []; particles = []; bullets = []; syringes = [];
+        player.score = 0; scoreEl.textContent = '0'; player.x = W/2; player.alive = true;
+        difficulty = 1; spawnTimer = 0; syringeSpawnTimer = 0;
         totalSpawned = 0; totalDestroyed = 0; currentCityIndex = 0; cityProgress = 0;
         player.y = H - 90;
+        // hide syringe toast if visible
+        const _sm = document.getElementById('syringeMsg');
+        if(_sm){ _sm.style.opacity = '0'; _sm.style.transform = 'translateX(-50%) translateY(-16px)'; }
         document.querySelector('#cityInfo .city').textContent = cities[0];
         document.querySelector('#cityInfo .progress').textContent = 'Batalla en progreso...';
         initLandscapes();
@@ -575,7 +817,7 @@
         } else if (percentage < 90) {
             award = 'Guerrero de la Verdad';
         } else {
-            award = 'Maestro de la Conspiración';
+            award = 'El Despertar de la Sociedad';
         }
         document.getElementById('goMsg').innerHTML += `<br>Porcentaje de virus destruidos: ${percentage}%<br>Premio: <strong>${award}</strong>`;
     }
@@ -612,10 +854,21 @@
     addEventListener('keydown', e=>{ if(e.key==='p' || e.key==='P') togglePause(); if(e.key==='m' || e.key==='M') setMute(!isMuted); });
 
     // allow clicking canvas to resume audio context on some browsers
-    canvas.addEventListener('pointerdown', ()=>{
+    canvas.addEventListener('pointerdown', (e)=>{
         if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        if(running && player.alive) shoot();
-    });
+        if(e.pointerType === 'mouse'){
+            if(running && player.alive) shoot();
+        } else {
+            // touch/pen: start movement instead of instant shooting
+            onScreenPointerDown(e);
+        }
+    }, {passive:false});
+    canvas.addEventListener('pointermove', (e)=>{ onScreenPointerMove(e); }, {passive:true});
+    canvas.addEventListener('pointerup', (e)=>{ onScreenPointerUp(e); }, {passive:true});
+    canvas.addEventListener('pointercancel', (e)=>{ onScreenPointerUp(e); }, {passive:true});
+
+    // Prevent long-press context menus on mobile
+    window.addEventListener('contextmenu', (e)=>{ if(IS_MOBILE) e.preventDefault(); });
 
     // pause when tab not visible (save CPU)
     document.addEventListener('visibilitychange', ()=>{
@@ -679,9 +932,257 @@
                 }
             }
         }
+        // bullet-syringe collisions
+        for(let i=syringes.length-1;i>=0;i--){
+            const s = syringes[i];
+            for(let j=bullets.length-1;j>=0;j--){
+                const b = bullets[j];
+                const dx = s.x - b.x; const dy = s.y - b.y; const d2 = dx*dx + dy*dy;
+                if(d2 < (s.r+b.r)*(s.r+b.r)){
+                    const remS = syringes.splice(i,1)[0]; syringePool.push(remS);
+                    const remB = bullets.splice(j,1)[0]; bulletPool.push(remB);
+                    createParticles(s.x, s.y, 'rgba(180,220,255,0.98)', 28);
+                    beep(320,0.09,'square',0.09);
+                    player.score += 10; scoreEl.textContent = player.score;
+                    totalDestroyed++;
+                    showSyringeSaved();
+                    break;
+                }
+            }
+        }
         // proceed with original update for movement, spawns, collisions, etc.
         _origUpdate(dt);
     }
+
+    // --- Doctor Card System ---
+    const doctorNames = [
+        "Dr. Luis Verdad", "Dra. Ana Libertad", "Dr. Carlos Resistencia", "Dra. María Despertar",
+        "Dr. José Consciencia", "Dra. Elena Sabiduría", "Dr. Miguel Valentía", "Dra. Carmen Justicia",
+        "Dr. Antonio Rebelde", "Dra. Isabel Coraje", "Dr. Fernando Luz", "Dra. Patricia Honor"
+    ];
+
+    const congratulationMessages = [
+        "¡Felicitaciones por tu valentía contra la desinformación!",
+        "¡Excelente trabajo defendiendo la verdad!",
+        "¡Tu resistencia contra el sistema es admirable!",
+        "¡Sigue luchando por la libertad de información!",
+        "¡Eres un verdadero guerrero de la verdad!",
+        "¡Tu despertar es inspirador para otros!",
+        "¡Continúa cuestionando la narrativa oficial!",
+        "¡Tu búsqueda de la verdad es encomiable!"
+    ];
+
+    function createDoctorCard(score, award) {
+        const cardCanvas = document.getElementById('doctorCard');
+        const cardCtx = cardCanvas.getContext('2d');
+        
+        // Clear canvas
+        cardCtx.clearRect(0, 0, 400, 600);
+        
+        // Background gradient
+        const gradient = cardCtx.createLinearGradient(0, 0, 0, 600);
+        gradient.addColorStop(0, '#1e3c72');
+        gradient.addColorStop(0.5, '#2a5298');
+        gradient.addColorStop(1, '#1e3c72');
+        cardCtx.fillStyle = gradient;
+        cardCtx.fillRect(0, 0, 400, 600);
+        
+        // Border
+        cardCtx.strokeStyle = '#4CAF50';
+        cardCtx.lineWidth = 4;
+        cardCtx.strokeRect(2, 2, 396, 596);
+        
+        // Header
+        cardCtx.fillStyle = '#4CAF50';
+        cardCtx.fillRect(0, 0, 400, 80);
+        
+        // Title
+        cardCtx.fillStyle = 'white';
+        cardCtx.font = 'bold 24px Inter, Arial';
+        cardCtx.textAlign = 'center';
+        cardCtx.fillText('MÉDICOS POR LA VERDAD', 200, 35);
+        cardCtx.font = 'bold 16px Inter, Arial';
+        cardCtx.fillText('CERTIFICADO DE LOGRO', 200, 60);
+        
+        // Doctor avatar (simple illustration)
+        cardCtx.fillStyle = '#f1c27d';
+        cardCtx.beginPath();
+        cardCtx.arc(200, 150, 40, 0, Math.PI * 2);
+        cardCtx.fill();
+        
+        // Doctor coat
+        cardCtx.fillStyle = 'white';
+        cardCtx.fillRect(160, 180, 80, 60);
+        
+        // Stethoscope
+        cardCtx.strokeStyle = '#333';
+        cardCtx.lineWidth = 3;
+        cardCtx.beginPath();
+        cardCtx.arc(185, 200, 8, 0, Math.PI);
+        cardCtx.stroke();
+        cardCtx.beginPath();
+        cardCtx.arc(215, 200, 8, 0, Math.PI);
+        cardCtx.stroke();
+        
+        // Eyes
+        cardCtx.fillStyle = '#333';
+        cardCtx.beginPath();
+        cardCtx.arc(190, 145, 3, 0, Math.PI * 2);
+        cardCtx.fill();
+        cardCtx.beginPath();
+        cardCtx.arc(210, 145, 3, 0, Math.PI * 2);
+        cardCtx.fill();
+        
+        // Smile
+        cardCtx.strokeStyle = '#333';
+        cardCtx.lineWidth = 2;
+        cardCtx.beginPath();
+        cardCtx.arc(200, 150, 15, 0.2 * Math.PI, 0.8 * Math.PI);
+        cardCtx.stroke();
+        
+        // Doctor name
+        const doctorName = doctorNames[Math.floor(Math.random() * doctorNames.length)];
+        cardCtx.fillStyle = 'white';
+        cardCtx.font = 'bold 20px Inter, Arial';
+        cardCtx.textAlign = 'center';
+        cardCtx.fillText(doctorName, 200, 280);
+        
+        // Congratulation message
+        const message = congratulationMessages[Math.floor(Math.random() * congratulationMessages.length)];
+        cardCtx.font = '16px Inter, Arial';
+        cardCtx.fillStyle = '#FFD700';
+        
+        // Word wrap for message
+        const words = message.split(' ');
+        let line = '';
+        let y = 320;
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = cardCtx.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > 350 && n > 0) {
+                cardCtx.fillText(line, 200, y);
+                line = words[n] + ' ';
+                y += 25;
+            } else {
+                line = testLine;
+            }
+        }
+        cardCtx.fillText(line, 200, y);
+        
+        // Score section
+        cardCtx.fillStyle = 'rgba(255,255,255,0.1)';
+        cardCtx.fillRect(20, 380, 360, 120);
+        
+        cardCtx.fillStyle = 'white';
+        cardCtx.font = 'bold 18px Inter, Arial';
+        cardCtx.fillText('PUNTUACIÓN OBTENIDA', 200, 410);
+        
+        cardCtx.font = 'bold 36px Inter, Arial';
+        cardCtx.fillStyle = '#FFD700';
+        cardCtx.fillText(score.toString(), 200, 450);
+        
+        cardCtx.font = 'bold 16px Inter, Arial';
+        cardCtx.fillStyle = '#4CAF50';
+        cardCtx.fillText(`RANGO: ${award}`, 200, 480);
+        
+        // Date
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-ES');
+        cardCtx.font = '14px Inter, Arial';
+        cardCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        cardCtx.fillText(`Fecha: ${dateStr}`, 200, 520);
+        
+        // Footer
+        cardCtx.font = 'bold 12px Inter, Arial';
+        cardCtx.fillStyle = '#4CAF50';
+        cardCtx.fillText('🏆 CORONA STRIKE - LUCHADOR ANTIVACUNAS 🏆', 200, 560);
+        
+        // Decorative elements
+        cardCtx.fillStyle = '#FFD700';
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const x = 200 + Math.cos(angle) * 70;
+            const y = 150 + Math.sin(angle) * 70;
+            cardCtx.beginPath();
+            cardCtx.arc(x, y, 3, 0, Math.PI * 2);
+            cardCtx.fill();
+        }
+    }
+
+    function downloadCard() {
+        try {
+            const cardCanvas = document.getElementById('doctorCard');
+            const link = document.createElement('a');
+            const fileName = `medico-por-la-verdad-${player.score}pts-${new Date().getTime()}.png`;
+            link.download = fileName;
+            link.href = cardCanvas.toDataURL('image/png', 1.0);
+            
+            // Append to body, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Show success message
+            alert('¡Tarjeta descargada exitosamente! 🎉\nBusca el archivo: ' + fileName);
+        } catch (error) {
+            console.error('Error downloading card:', error);
+            alert('Error al descargar la tarjeta. Intenta de nuevo.');
+        }
+    }
+
+    function shareCard() {
+        const cardCanvas = document.getElementById('doctorCard');
+        
+        if (navigator.share) {
+            // Use native sharing if available
+            cardCanvas.toBlob(blob => {
+                const file = new File([blob], `medico-por-la-verdad-${player.score}pts.png`, { type: 'image/png' });
+                navigator.share({
+                    title: 'Mi Tarjeta de Médico por la Verdad',
+                    text: `¡Obtuve ${player.score} puntos luchando contra la desinformación! 🏆`,
+                    files: [file]
+                }).catch(err => console.log('Error sharing:', err));
+            });
+        } else {
+            // Fallback: copy to clipboard
+            cardCanvas.toBlob(blob => {
+                navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]).then(() => {
+                    alert('¡Tarjeta copiada al portapapeles! Pégala en WhatsApp, Instagram o Facebook.');
+                }).catch(() => {
+                    // If clipboard fails, just download
+                    downloadCard();
+                    alert('Tarjeta descargada. Compártela en tus redes sociales.');
+                });
+            });
+        }
+    }
+
+    // Event listeners for card functionality
+    document.getElementById('cardBtn').addEventListener('click', () => {
+        const percentage = totalSpawned > 0 ? Math.round((totalDestroyed / totalSpawned) * 100) : 0;
+        let award = '';
+        if (percentage < 30) {
+            award = 'Novato Anti-Vacunas';
+        } else if (percentage < 60) {
+            award = 'Luchador Contra el Sistema';
+        } else if (percentage < 90) {
+            award = 'Guerrero de la Verdad';
+        } else {
+            award = 'El Despertar de la Sociedad';
+        }
+        
+        createDoctorCard(player.score, award);
+        document.getElementById('cardOverlay').style.display = 'flex';
+    });
+
+    document.getElementById('downloadCard').addEventListener('click', downloadCard);
+    document.getElementById('shareCard').addEventListener('click', shareCard);
+    document.getElementById('closeCard').addEventListener('click', () => {
+        document.getElementById('cardOverlay').style.display = 'none';
+    });
 
     // initial draw
     drawBackground(); drawPlayer();
